@@ -1,4 +1,5 @@
 node_modules/
+task1/
 certs/
 selfsigned.crt
 selfsigned.key
