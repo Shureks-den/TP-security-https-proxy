@@ -3,7 +3,7 @@ import tls from 'tls'
 import { spawn } from 'child_process';
 import fs from 'fs'
 import http from 'http'
-import url from 'url'
+
 
 const certs = {};
 fs.readdirSync('certs/').forEach(file => {
@@ -51,38 +51,29 @@ function SNICallback(servername, cb) {
     }
 }
 
-function httpConnection(req, res) {
+function httpMiddleware(req, res) {
     if (req.url.startsWith('http')) {
-        try {
-            const parsedUrl = url.parse(req.url);
-            const options = {
-                host: parsedUrl.hostname,
-                port: 80
-            };
-            const proxyReq = net.connect(options, () => {
-
-                let h = '';
-                for (let i = 0; i < req.rawHeaders.length / 2; ++i) {
-                    if (req.rawHeaders[i * 2] === 'Proxy-Connection') {
-                        continue
-                    }
-                    h += `${req.rawHeaders[i * 2]}: ${req.rawHeaders[i * 2 + 1]}\r\n`;
-                }
-                let p = Buffer.from(`${req.method} ${parsedUrl.path} HTTP/1.1\r\n${h}\r\n`)
-                proxyReq.write(p);
-                req.socket.pipe(proxyReq).pipe(req.socket);        
-            });
-            proxyReq.on('error', (e) => {
-                console.log(`proxyReq error ${e}`)
-            })
-
-        } catch (e) {
-            console.log(`Unable to parse ${req.url}`)
-        }
+        const options = {
+            host: req.url.split('/')[2],
+            port: 80
+        };
+        const proxyReq = net.connect(options, () => {
+            const path = req.url.split('/').slice(2).join('/');
+            let proxyHeaders = '';
+            for (let i = 0; i < req.rawHeaders.length / 2 - 1; ++i) {
+                proxyHeaders += `${req.rawHeaders[i * 2]}: ${req.rawHeaders[i * 2 + 1]}\r\n`;
+            }
+            let p = Buffer.from(`${req.method} ${path} HTTP/1.1\r\n${proxyHeaders}\r\n`)
+            proxyReq.write(p);
+            req.socket.pipe(proxyReq).pipe(req.socket);        
+        });
+        proxyReq.on('error', (e) => {
+            console.log(`proxyReq error ${e}`)
+        });
     }
 }
 
-const server = http.createServer(httpConnection);
+const server = http.createServer(httpMiddleware);
 
 server.on('connect', (req, clientProxySocket, head) => {
     console.log(`connect ${req.url}`);

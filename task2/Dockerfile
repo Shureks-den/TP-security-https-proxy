@@ -10,5 +10,6 @@ COPY . .
 
 EXPOSE 8080
 
+RUN sh ./gen_ca.sh
 
 CMD npm run start
